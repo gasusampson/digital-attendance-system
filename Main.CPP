@@ -4,7 +4,7 @@
  *  Programme : HND Electrical Engineering (Level 200)
  *  Course    : EEE227 - Introduction to C++ Programming
  *  Developer : Franklin Sampson
- *  Version   : 2.3 - Reports and complete menu flow
+ *  Version   : 3.1 - File saving and loading implemented
  * ============================================================
  */
 
@@ -18,7 +18,9 @@
 #include <sstream>
 using namespace std;
 
-const string ADMIN_FILE = "admin.txt";
+const string ADMIN_FILE    = "admin.txt";
+const string STUDENTS_FILE = "students.txt";
+const string SESSIONS_FILE = "sessions.txt";
 
 // ============================================================
 //  UTILITY HELPERS
@@ -79,6 +81,26 @@ public:
              << setw(20) << lastName
              << setw(30) << programme
              << "\n";
+    }
+
+    // Serialise to pipe-delimited string for file storage
+    string serialise() const {
+        return indexNumber + "|" + firstName + "|" + lastName + "|" + programme;
+    }
+
+    // Deserialise from a pipe-delimited file line
+    static Student deserialise(const string& line) {
+        Student s;
+        size_t p1 = line.find('|');
+        size_t p2 = line.find('|', p1 + 1);
+        size_t p3 = line.find('|', p2 + 1);
+        if (p1 == string::npos || p2 == string::npos || p3 == string::npos)
+            return s;
+        s.indexNumber = trim(line.substr(0, p1));
+        s.firstName   = trim(line.substr(p1 + 1, p2 - p1 - 1));
+        s.lastName    = trim(line.substr(p2 + 1, p3 - p2 - 1));
+        s.programme   = trim(line.substr(p3 + 1));
+        return s;
     }
 };
 
@@ -152,6 +174,18 @@ public:
         cout << "  Duration    : " << durationHours  << " hour(s)\n";
         cout << "  Students    : " << records.size() << "\n";
         printDivider('=');
+    }
+
+    // Serialise session block for file storage
+    string serialise() const {
+        ostringstream oss;
+        oss << "SESSION|" << courseCode << "|" << date
+            << "|" << startTime << "|" << durationHours << "\n";
+        for (const auto& r : records)
+            oss << "RECORD|" << r.indexNumber << "|"
+                << r.studentName << "|" << r.status << "\n";
+        oss << "END_SESSION\n";
+        return oss.str();
     }
 };
 
@@ -250,6 +284,93 @@ bool adminLogin() {
 }
 
 // ============================================================
+//  FILE HANDLING - STUDENTS
+// ============================================================
+
+void saveStudentsToFile() {
+    ofstream file(STUDENTS_FILE);
+    if (!file.is_open()) { cout << "\n  [ERROR] Cannot open " << STUDENTS_FILE << "\n"; return; }
+    for (const auto& s : students) file << s.serialise() << "\n";
+    file.close();
+}
+
+void loadStudentsFromFile() {
+    ifstream file(STUDENTS_FILE);
+    if (!file.is_open()) return;
+    students.clear();
+    string line;
+    while (getline(file, line)) {
+        line = trim(line);
+        if (!line.empty()) {
+            Student s = Student::deserialise(line);
+            if (!s.getIndexNumber().empty()) students.push_back(s);
+        }
+    }
+    file.close();
+}
+
+// ============================================================
+//  FILE HANDLING - SESSIONS
+// ============================================================
+
+void saveAllSessionsToFile() {
+    ofstream file(SESSIONS_FILE);
+    if (!file.is_open()) { cout << "\n  [ERROR] Cannot open " << SESSIONS_FILE << "\n"; return; }
+    for (const auto& sess : sessions) file << sess.serialise();
+    file.close();
+}
+
+void loadAllSessionsFromFile() {
+    sessions.clear();
+    ifstream file(SESSIONS_FILE);
+    if (!file.is_open()) return;
+
+    int count = 0;
+    string line;
+    while (getline(file, line)) {
+        line = trim(line);
+        if (line.empty()) continue;
+
+        if (line.size() >= 8 && line.substr(0, 8) == "SESSION|") {
+            size_t p1 = line.find('|');
+            size_t p2 = line.find('|', p1 + 1);
+            size_t p3 = line.find('|', p2 + 1);
+            size_t p4 = line.find('|', p3 + 1);
+            if (p4 == string::npos) continue;
+
+            AttendanceSession sess;
+            sess.setCourseCode(trim(line.substr(p1 + 1, p2 - p1 - 1)));
+            sess.setDate      (trim(line.substr(p2 + 1, p3 - p2 - 1)));
+            sess.setStartTime (trim(line.substr(p3 + 1, p4 - p3 - 1)));
+            sess.setDuration  (stoi(trim(line.substr(p4 + 1))));
+            sess.rebuildSessionID();
+
+            string recLine;
+            while (getline(file, recLine)) {
+                recLine = trim(recLine);
+                if (recLine.empty()) continue;
+                if (recLine == "END_SESSION") break;
+                if (recLine.size() >= 7 && recLine.substr(0, 7) == "RECORD|") {
+                    size_t rp1 = recLine.find('|');
+                    size_t rp2 = recLine.find('|', rp1 + 1);
+                    size_t rp3 = recLine.find('|', rp2 + 1);
+                    if (rp3 == string::npos) continue;
+                    AttendanceRecord r;
+                    r.indexNumber = trim(recLine.substr(rp1 + 1, rp2 - rp1 - 1));
+                    r.studentName = trim(recLine.substr(rp2 + 1, rp3 - rp2 - 1));
+                    r.status      = trim(recLine.substr(rp3 + 1));
+                    sess.getRecords().push_back(r);
+                }
+            }
+            sessions.push_back(sess);
+            count++;
+        }
+    }
+    file.close();
+    if (count > 0) cout << "  " << count << " session(s) loaded.\n";
+}
+
+// ============================================================
 //  STUDENT FUNCTIONS
 // ============================================================
 
@@ -297,6 +418,7 @@ void registerStudent() {
     if (prog.empty()) { cout << "  [ERROR] Programme cannot be empty.\n"; return; }
 
     students.push_back(Student(idx, fName, lName, prog));
+    saveStudentsToFile();
     cout << "\n  [SUCCESS] '" << fName << " " << lName << "' registered!\n";
 }
 
@@ -430,6 +552,7 @@ void createSession() {
 
     newSession.initialiseRecords(students);
     sessions.push_back(newSession);
+    saveAllSessionsToFile();
     cout << "\n  [SUCCESS] Session created!\n";
     sessions.back().displayHeader();
 }
@@ -523,7 +646,8 @@ void markAttendance() {
         cout << "  Marked: " << records[i].status << "\n\n";
     }
 
-    cout << "  [SUCCESS] Attendance marked!\n"; printDivider('=');
+    saveAllSessionsToFile();
+    cout << "  [SUCCESS] Attendance marked and saved!\n"; printDivider('=');
 }
 
 void updateAttendance() {
@@ -576,6 +700,7 @@ void updateAttendance() {
             else if (mark == 2) records[i].status = "Absent";
             else                records[i].status = "Late";
 
+            saveAllSessionsToFile();
             cout << "\n  [SUCCESS] Updated '" << records[i].studentName
                  << "' from '" << old << "' to '" << records[i].status << "'\n";
             break;
@@ -771,12 +896,13 @@ int main() {
     if (!adminAccountExists()) createAdminAccount();
     if (!adminLogin()) return 1;
 
+    cout << "\n  Loading student records...\n";
+    loadStudentsFromFile();
+    cout << "  " << students.size() << " student(s) loaded.\n";
+    cout << "  Loading session records...\n";
+    loadAllSessionsFromFile();
+    cout << "\n";
+
     mainMenu();
     return 0;
 }
-```
-
-**Then in terminal:**
-```
-git add .
-git commit -m "Week 2: Add report generation with summary counts and menu-driven flow"
