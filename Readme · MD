@@ -1,171 +1,150 @@
 # Digital Attendance System for Hour-Based Lectures
 
-**Course:** EEE227 – Introduction to C++ Programming  
-**Programme:** HND Electrical Engineering (Level 200)  
-**Developer:** Sampson Gasu  
-**GitHub:** gasusampson  
+**Course:** EEE227 - Introduction to C++ Programming  
+**Programme:** HND Electrical Engineering, Level 200  
+**Developer:** Franklin Sampson  
+**Platform:** Windows (Offline, Console-based)
 
 ---
 
-## Project Overview
+## Overview
 
-A console-based digital attendance management system built in C++ that replaces paper-based attendance taking in lecture halls. The system allows an admin to register students, create lecture sessions, mark and update attendance, generate reports, and export data to CSV files — all stored persistently in text files.
-
----
-
-## Features
-
-- **Admin Authentication** — Secure login with account creation on first run (3-attempt lockout)
-- **Student Management** — Register manually or bulk import from CSV/Excel file
-- **Edit & Delete Students** — Changes cascade automatically to all session records
-- **Session Management** — Create, edit, and delete lecture sessions with course code, date, time, and duration
-- **Attendance Marking** — Mark each student Present or Absent per session
-- **Update Attendance** — Correct individual student records after marking
-- **Reports** — View attendance list and summary (present count, absent count, attendance rate %)
-- **CSV Export** — Export any session report to a `.csv` file openable in Excel or Google Sheets
-- **Persistent Storage** — All data saved to text files and reloaded automatically on next run
-- **Input Validation** — All inputs validated with cancel (0) option at every prompt
-- **Change Password** — Admin can update password from within the system
-- **Clear All Data** — Double-confirmed wipe of all records (admin password required)
+A console-based digital attendance management system built in C++.
+It replaces paper-based attendance with a secure, file-backed system
+that supports multiple lecture sessions, student management, and
+CSV export for reporting.
 
 ---
 
 ## How to Compile and Run
 
-### Requirements
-- C++ compiler (g++ recommended)
-- Windows OS (offline operation supported)
-- VS Code with C/C++ extension (recommended IDE)
-
-### Compile
+**Requirements:** A C++ compiler (g++ recommended via MinGW on Windows)
 ```bash
-g++ main.cpp -o attendance.exe
+g++ -o attendance main.cpp
+attendance.exe
 ```
 
-### Run
-```bash
-./attendance.exe
-```
+Or open the project folder in VS Code and use the built-in Run button.
 
 ---
 
-## File Structure
+## First Run
 
-```
-digital-attendance-system/
-├── main.cpp          # Full source code
-├── README.md         # Project documentation
-├── students.txt      # Auto-generated: stores registered students
-├── sessions.txt      # Auto-generated: stores sessions and attendance records
-└── admin.txt         # Auto-generated: stores admin credentials (gitignored)
-```
-
-> `admin.txt` and `attendance.exe` are excluded from version control via `.gitignore`
+On first launch the system will ask you to create an admin account.
+Choose a username and password — these are stored in `admin.txt`.
+You will need these credentials every time you start the program.
 
 ---
 
-## Data File Formats
+## Main Menu Options
 
-### students.txt
-One student per line, pipe-delimited:
-```
-EE/22/001|Kwame|Asante|HND Electrical Engineering
-EE/22/002|Ama|Owusu|HND Electrical Engineering
-```
+| Option | Feature |
+|--------|---------|
+| 1 | Student Management |
+| 2 | Session Management |
+| 3 | Mark / Update Attendance |
+| 4 | Reports and Export |
+| 5 | Admin Tools |
+| 0 | Exit |
 
-### sessions.txt
-Block format per session:
-```
-SESSION|EEE227|2026-02-23|08:00|2
-RECORD|EE/22/001|Kwame Asante|Present
-RECORD|EE/22/002|Ama Owusu|Absent
-END_SESSION
-```
+---
+
+## Student Management
+
+- **Register** students one by one (manual entry)
+- **Import** students in bulk from a CSV file
+- **View** the full student list in a formatted table
+- **Search** by index number
+- **Edit** any field including index number (updates cascade to all sessions)
+- **Delete** a student (removes them from all sessions too)
 
 ---
 
 ## Importing Students from CSV
 
-Prepare a `.csv` file with this format (one student per line):
+Place a `.csv` file in the same folder as `attendance.exe`.  
+The file must follow this exact format (one student per line):
 ```
 IndexNumber,FirstName,LastName,Programme
 EE/22/001,Kwame,Asante,HND Electrical Engineering
 EE/22/002,Ama,Owusu,HND Electrical Engineering
 ```
 
-**Steps:**
-1. Create the list in Excel using 4 columns: Index Number, First Name, Last Name, Programme
-2. Save As → CSV (Comma delimited)
-3. Place the `.csv` file in the same folder as `attendance.exe`
-4. Use **Student Management → Import Students from File**
+**To export from Excel:**
+1. Open your Excel student list
+2. Columns must be: Index | First Name | Last Name | Programme
+3. Go to File → Save As → CSV (Comma delimited)
+4. Place the saved `.csv` in the program folder
+5. Use option 2 in Student Management to import
 
 ---
 
-## Exporting Reports
+## Session Management
 
-Reports are exported as `.csv` files named `report_<SessionID>.csv`.  
-They can be opened directly in Microsoft Excel or Google Sheets.
+- **Create** a session with course code, date (YYYY-MM-DD), start time (HH:MM), and duration (1–8 hours)
+- **View** all sessions in a summary table
+- **Edit** session details
+- **Delete** a session permanently
+
+Each session gets a unique ID generated from the course code and date (e.g. `EEE227_2026_02_23`).
 
 ---
 
-## Menu Structure
+## Attendance Marking
 
+- Select a session and mark each student as **Present**, **Absent**, or **Late**
+- Use the update option to correct a single student's status after the fact
+- All changes are saved to file immediately
+
+---
+
+## Reports and Export
+
+- **Screen report:** Displays the full attendance list and summary counts for any session
+- **CSV export:** Creates a file named `report_<SessionID>.csv` in the program folder, openable in Excel or Google Sheets
+- Summary includes: Total Students, Present, Late, Absent, and Attendance Rate %
+
+---
+
+## Data Files
+
+| File | Contents |
+|------|----------|
+| `admin.txt` | Admin username and password |
+| `students.txt` | All registered student records |
+| `sessions.txt` | All sessions and attendance records |
+| `report_*.csv` | Exported attendance reports |
+
+All data persists between program runs. Do not manually edit these files.
+
+---
+
+## Admin Tools
+
+- **Change password:** Requires current password before setting a new one
+- **Clear all data:** Requires typing `CLEAR` then entering the admin password — deletes all students and sessions (admin account is kept)
+
+---
+
+## Project Structure
 ```
-Main Menu
-├── 1. Student Management
-│   ├── Register New Student (Manual)
-│   ├── Import Students from File (CSV)
-│   ├── View All Students
-│   ├── Search Student by Index Number
-│   ├── Edit Student Details
-│   └── Delete Student
-├── 2. Session Management
-│   ├── Create New Lecture Session
-│   ├── View All Sessions
-│   ├── Edit Session Details
-│   └── Delete Session
-├── 3. Mark / Update Attendance
-│   ├── Mark Attendance for a Session
-│   └── Update a Student's Attendance
-├── 4. Reports and Export
-│   ├── View Attendance Report (Screen)
-│   └── Export Session Report to CSV
-└── 5. Admin Tools
-    ├── Change Admin Password
-    └── Clear ALL System Data
+digital-attendance-system/
+├── main.cpp          ← Full program source code
+├── README.md         ← This file
+├── admin.txt         ← Created on first run
+├── students.txt      ← Created when students are registered
+└── sessions.txt      ← Created when sessions are saved
 ```
 
 ---
 
-## Marking Scheme Coverage
-
-| Criteria                   | Marks | Status      |
-|----------------------------|-------|-------------|
-| Student Management         | 6     | Complete |
-| Session Creation           | 6     | Complete |
-| Attendance Marking         | 6     | Complete |
-| File Storage and Loading   | 6     | Complete |
-| Reports and Summary        | 4     | Complete |
-| Code Quality and Structure | 2     | Complete |
-| **Total**                  | **30**|          |
-
----
-
-## Development Timeline
+## Weekly Development Progress
 
 | Week | Milestone |
 |------|-----------|
-| Week 1 | Project setup, Student class, register/view/search students, admin login |
-| Week 2 | AttendanceSession class, session creation, edit/delete students and sessions |
-| Week 3 | Attendance marking, update records, on-screen report generation |
-| Week 4 | File storage (save/load), CSV export, bulk import, admin tools, final testing |
+| Week 1 | Student class, admin login, registration, search |
+| Week 2 | AttendanceSession class, marking logic, reports |
+| Week 3 | File saving/loading, edit/delete, CSV export and import |
+| Week 4 | Code refactoring, comments, README, final testing |
+```
 
----
-
-## Submission Details
-
-- **Code Submission Deadline:** February 23, 2026  
-- **Project Demonstration:** February 24, 2026  
-- **Version Control:** GitHub (steady weekly commits across 4 weeks)  
-- **Development Environment:** VS Code  
-- **Platform:** Windows, Offline First
