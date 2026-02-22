@@ -3,7 +3,7 @@
  *  DIGITAL ATTENDANCE SYSTEM FOR HOUR-BASED LECTURES
  *  Programme : HND Electrical Engineering (Level 200)
  *  Course    : EEE227 - Introduction to C++ Programming
- *  Developer : [Your Name]
+ *  Developer : GASU SAMPSON
  *  Version   : Final - Complete with all features
  *
  *  FEATURES:
