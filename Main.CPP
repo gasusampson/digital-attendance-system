@@ -4,23 +4,23 @@
  *  Programme : HND Electrical Engineering (Level 200)
  *  Course    : EEE227 - Introduction to C++ Programming
  *  Developer : Franklin Sampson
- *  Version   : 3.1 - File saving and loading implemented
+ *  Version   : 3.3 - CSV export, bulk import, admin tools
  * ============================================================
  */
 
 #include <iostream>
 #include <fstream>
-#include <string>
 #include <vector>
+#include <string>
 #include <iomanip>
 #include <algorithm>
 #include <limits>
 #include <sstream>
 using namespace std;
 
-const string ADMIN_FILE    = "admin.txt";
 const string STUDENTS_FILE = "students.txt";
 const string SESSIONS_FILE = "sessions.txt";
+const string ADMIN_FILE    = "admin.txt";
 
 // ============================================================
 //  UTILITY HELPERS
@@ -83,12 +83,10 @@ public:
              << "\n";
     }
 
-    // Serialise to pipe-delimited string for file storage
     string serialise() const {
         return indexNumber + "|" + firstName + "|" + lastName + "|" + programme;
     }
 
-    // Deserialise from a pipe-delimited file line
     static Student deserialise(const string& line) {
         Student s;
         size_t p1 = line.find('|');
@@ -110,7 +108,7 @@ public:
 struct AttendanceRecord {
     string indexNumber;
     string studentName;
-    string status;   // "Present", "Absent", or "Late"
+    string status;
 
     AttendanceRecord() : status("Absent") {}
     AttendanceRecord(string idx, string name)
@@ -176,7 +174,6 @@ public:
         printDivider('=');
     }
 
-    // Serialise session block for file storage
     string serialise() const {
         ostringstream oss;
         oss << "SESSION|" << courseCode << "|" << date
@@ -227,17 +224,14 @@ void saveAdminCredentials(const string& username, const string& password) {
 void createAdminAccount() {
     cout << "\n"; printDivider('=');
     cout << "  FIRST-TIME SETUP: CREATE ADMIN ACCOUNT\n"; printDivider('=');
-    cout << "  No admin account found. Please create one.\n\n";
 
     string username, password, confirm;
-
     while (true) {
         cout << "  Enter admin username : ";
         getline(cin, username); username = trim(username);
         if (!username.empty()) break;
         cout << "  [ERROR] Username cannot be empty.\n";
     }
-
     while (true) {
         cout << "  Enter admin password : ";
         getline(cin, password); password = trim(password);
@@ -247,7 +241,6 @@ void createAdminAccount() {
         if (password == confirm) break;
         cout << "  [ERROR] Passwords do not match. Try again.\n";
     }
-
     saveAdminCredentials(username, password);
     cout << "\n  [SUCCESS] Admin account created! Username: " << username << "\n";
     printDivider('=');
@@ -259,7 +252,6 @@ bool adminLogin() {
         cout << "  [ERROR] Could not read admin credentials.\n";
         return false;
     }
-
     cout << "\n"; printDivider('=');
     cout << "  ADMIN LOGIN\n"; printDivider('=');
 
@@ -268,7 +260,6 @@ bool adminLogin() {
         string username, password;
         cout << "  Username : "; getline(cin, username);
         cout << "  Password : "; getline(cin, password);
-
         if (trim(username) == storedUser && trim(password) == storedPass) {
             cout << "\n  [SUCCESS] Welcome, " << storedUser << "!\n";
             printDivider('=');
@@ -283,8 +274,16 @@ bool adminLogin() {
     return false;
 }
 
+bool verifyAdminPassword() {
+    string storedUser, storedPass;
+    if (!loadAdminCredentials(storedUser, storedPass)) return false;
+    cout << "  Enter admin password to confirm: ";
+    string pwd; getline(cin, pwd);
+    return trim(pwd) == storedPass;
+}
+
 // ============================================================
-//  FILE HANDLING - STUDENTS
+//  FILE HANDLING
 // ============================================================
 
 void saveStudentsToFile() {
@@ -308,10 +307,6 @@ void loadStudentsFromFile() {
     }
     file.close();
 }
-
-// ============================================================
-//  FILE HANDLING - SESSIONS
-// ============================================================
 
 void saveAllSessionsToFile() {
     ofstream file(SESSIONS_FILE);
@@ -395,8 +390,7 @@ void printStudentTableHeader() {
 void registerStudent() {
     cout << "\n"; printDivider('=');
     cout << "  REGISTER NEW STUDENT\n";
-    cout << "  (Enter 0 at any prompt to cancel)\n";
-    printDivider('=');
+    cout << "  (Enter 0 at any prompt to cancel)\n"; printDivider('=');
 
     string idx, fName, lName, prog;
 
@@ -422,14 +416,73 @@ void registerStudent() {
     cout << "\n  [SUCCESS] '" << fName << " " << lName << "' registered!\n";
 }
 
+void importStudentsFromFile() {
+    cout << "\n"; printDivider('=');
+    cout << "  IMPORT STUDENTS FROM CSV FILE\n"; printDivider('=');
+    cout << "  Format (one student per line):\n";
+    cout << "  IndexNumber,FirstName,LastName,Programme\n\n";
+    cout << "  Enter filename (e.g. students_list.csv) or 0 to cancel: ";
+
+    string filename; getline(cin, filename); filename = trim(filename);
+    if (filename == "0") { cout << "  [CANCELLED] Returning to menu.\n"; return; }
+
+    ifstream file(filename);
+    if (!file.is_open()) {
+        cout << "\n  [ERROR] Could not open file: '" << filename << "'\n";
+        cout << "  Make sure the file is in the same folder as the program.\n";
+        return;
+    }
+
+    int imported = 0, skipped = 0, lineNum = 0;
+    string line;
+
+    while (getline(file, line)) {
+        lineNum++;
+        line = trim(line);
+        if (line.empty()) continue;
+
+        if (lineNum == 1) {
+            string firstWord = toUpper(trim(line.substr(0, line.find(','))));
+            if (firstWord == "INDEX" || firstWord == "INDEX NUMBER" ||
+                firstWord == "INDEXNUMBER" || firstWord == "NO" ||
+                firstWord == "S/N" || firstWord == "SN") {
+                cout << "  [INFO] Skipping header row.\n";
+                continue;
+            }
+        }
+
+        stringstream ss(line);
+        string idx, fName, lName, prog;
+        getline(ss, idx,   ','); idx   = trim(idx);
+        getline(ss, fName, ','); fName = trim(fName);
+        getline(ss, lName, ','); lName = trim(lName);
+        getline(ss, prog);       prog  = trim(prog);
+
+        if (idx.empty() || fName.empty() || lName.empty() || prog.empty()) {
+            cout << "  [SKIP] Line " << lineNum << ": Missing fields.\n";
+            skipped++; continue;
+        }
+        if (indexExists(idx)) {
+            cout << "  [SKIP] Line " << lineNum << ": Index '" << idx << "' already exists.\n";
+            skipped++; continue;
+        }
+
+        students.push_back(Student(idx, fName, lName, prog));
+        imported++;
+    }
+
+    file.close();
+    if (imported > 0) { saveStudentsToFile(); cout << "\n  [SUCCESS] " << imported << " student(s) imported!\n"; }
+    if (skipped  > 0) cout << "  [INFO] " << skipped << " row(s) skipped.\n";
+    if (imported == 0 && skipped == 0) cout << "  [WARNING] No valid data found in file.\n";
+    printDivider('=');
+}
+
 void viewAllStudents() {
     cout << "\n"; printDivider('=');
     cout << "  ALL REGISTERED STUDENTS  (Total: " << students.size() << ")\n";
     if (students.empty()) {
-        printDivider('=');
-        cout << "  No students registered yet.\n";
-        printDivider('=');
-        return;
+        printDivider('='); cout << "  No students registered yet.\n"; printDivider('='); return;
     }
     printStudentTableHeader();
     for (size_t i = 0; i < students.size(); i++) {
@@ -454,11 +507,110 @@ void searchStudentByIndex() {
             cout << "\n  STUDENT FOUND:\n";
             printStudentTableHeader();
             cout << left << setw(5) << " "; s.display();
-            printDivider('=');
-            return;
+            printDivider('='); return;
         }
     }
     cout << "  [NOT FOUND] No student with index '" << idx << "'.\n";
+}
+
+void editStudent() {
+    cout << "\n"; printDivider('=');
+    cout << "  EDIT STUDENT DETAILS\n";
+    cout << "  (Enter 0 to cancel)\n"; printDivider('=');
+    if (students.empty()) { cout << "  No students registered yet.\n"; return; }
+
+    viewAllStudents();
+    cout << "  Enter student NUMBER to edit (or 0 to cancel): ";
+    string input; getline(cin, input); input = trim(input);
+    if (input == "0") { cout << "  [CANCELLED] Returning to menu.\n"; return; }
+
+    int choice;
+    try { choice = stoi(input); } catch (...) { cout << "  [ERROR] Invalid input.\n"; return; }
+    if (choice < 1 || choice > (int)students.size()) { cout << "  [ERROR] Invalid number.\n"; return; }
+
+    Student& s = students[choice - 1];
+    string oldIndex = s.getIndexNumber();
+
+    cout << "\n  Editing: " << s.getFullName() << "\n";
+    cout << "  Press ENTER to keep current value.\n\n";
+    string newVal;
+
+    cout << "  Index Number [" << s.getIndexNumber() << "]: ";
+    getline(cin, newVal); newVal = trim(newVal);
+    if (!newVal.empty() && newVal != oldIndex) {
+        if (indexExists(newVal)) { cout << "  [WARNING] Index already exists. Not changed.\n"; }
+        else {
+            for (auto& sess : sessions)
+                for (auto& rec : sess.getRecords())
+                    if (toUpper(rec.indexNumber) == toUpper(oldIndex))
+                        rec.indexNumber = newVal;
+            s.setIndexNumber(newVal);
+        }
+    }
+
+    cout << "  First Name   [" << s.getFirstName() << "]: ";
+    getline(cin, newVal); newVal = trim(newVal);
+    if (!newVal.empty()) s.setFirstName(newVal);
+
+    cout << "  Last Name    [" << s.getLastName() << "]: ";
+    getline(cin, newVal); newVal = trim(newVal);
+    if (!newVal.empty()) s.setLastName(newVal);
+
+    cout << "  Programme    [" << s.getProgramme() << "]: ";
+    getline(cin, newVal); newVal = trim(newVal);
+    if (!newVal.empty()) s.setProgramme(newVal);
+
+    string newFullName = s.getFullName();
+    for (auto& sess : sessions)
+        for (auto& rec : sess.getRecords())
+            if (toUpper(rec.indexNumber) == toUpper(s.getIndexNumber()))
+                rec.studentName = newFullName;
+
+    saveStudentsToFile();
+    saveAllSessionsToFile();
+    cout << "\n  [SUCCESS] Student details updated!\n";
+    printStudentTableHeader();
+    cout << left << setw(5) << " "; s.display();
+    printDivider('=');
+}
+
+void deleteStudent() {
+    cout << "\n"; printDivider('=');
+    cout << "  DELETE STUDENT\n";
+    cout << "  (Enter 0 to cancel)\n"; printDivider('=');
+    if (students.empty()) { cout << "  No students registered yet.\n"; return; }
+
+    viewAllStudents();
+    cout << "  Enter student NUMBER to delete (or 0 to cancel): ";
+    string input; getline(cin, input); input = trim(input);
+    if (input == "0") { cout << "  [CANCELLED] Returning to menu.\n"; return; }
+
+    int choice;
+    try { choice = stoi(input); } catch (...) { cout << "  [ERROR] Invalid input.\n"; return; }
+    if (choice < 1 || choice > (int)students.size()) { cout << "  [ERROR] Invalid number.\n"; return; }
+
+    string idx      = students[choice - 1].getIndexNumber();
+    string fullName = students[choice - 1].getFullName();
+
+    cout << "\n  Student to delete: " << fullName << " (" << idx << ")\n";
+    cout << "  WARNING: Also removes from ALL sessions. Type YES to confirm: ";
+    string confirm; getline(cin, confirm);
+
+    if (toUpper(trim(confirm)) != "YES") { cout << "  [CANCELLED] Student not deleted.\n"; return; }
+
+    for (auto& sess : sessions) {
+        vector<AttendanceRecord>& recs = sess.getRecords();
+        recs.erase(remove_if(recs.begin(), recs.end(),
+            [&idx](const AttendanceRecord& r) {
+                return toUpper(r.indexNumber) == toUpper(idx);
+            }), recs.end());
+    }
+
+    students.erase(students.begin() + (choice - 1));
+    saveStudentsToFile();
+    saveAllSessionsToFile();
+    cout << "\n  [SUCCESS] '" << fullName << "' deleted from system and all sessions.\n";
+    printDivider('=');
 }
 
 // ============================================================
@@ -502,14 +654,13 @@ void createSession() {
     cout << "  (Enter 0 at any prompt to cancel)\n"; printDivider('=');
 
     if (students.empty()) {
-        cout << "  [WARNING] No students registered yet. Register students first.\n";
-        return;
+        cout << "  [WARNING] No students registered yet.\n"; return;
     }
 
     string code, date, startTime;
     int duration = 0;
 
-    cout << "  Enter Course Code (e.g. EEE227) or 0 to cancel: ";
+    cout << "  Enter Course Code or 0 to cancel: ";
     getline(cin, code); code = trim(code);
     if (code == "0") { cout << "  [CANCELLED] Returning to menu.\n"; return; }
     if (code.empty()) { cout << "  [ERROR] Course code cannot be empty.\n"; return; }
@@ -536,18 +687,13 @@ void createSession() {
         if (d == "0") { cout << "  [CANCELLED] Returning to menu.\n"; return; }
         try {
             duration = stoi(d);
-            if (duration < 1 || duration > 8)
-                cout << "  [ERROR] Duration must be 1-8 hours.\n";
-        } catch (...) {
-            cout << "  [ERROR] Enter a valid number.\n";
-            duration = 0;
-        }
+            if (duration < 1 || duration > 8) cout << "  [ERROR] Duration must be 1-8.\n";
+        } catch (...) { cout << "  [ERROR] Enter a valid number.\n"; duration = 0; }
     }
 
     AttendanceSession newSession(code, date, startTime, duration);
     if (sessionExists(newSession.getSessionID())) {
-        cout << "  [ERROR] Session for " << code << " on " << date << " already exists.\n";
-        return;
+        cout << "  [ERROR] Session for " << code << " on " << date << " already exists.\n"; return;
     }
 
     newSession.initialiseRecords(students);
@@ -561,9 +707,7 @@ void viewAllSessions() {
     cout << "\n"; printDivider('=');
     cout << "  ALL LECTURE SESSIONS  (Total: " << sessions.size() << ")\n"; printDivider('=');
 
-    if (sessions.empty()) {
-        cout << "  No sessions created yet.\n"; printDivider('='); return;
-    }
+    if (sessions.empty()) { cout << "  No sessions created yet.\n"; printDivider('='); return; }
 
     cout << left
          << setw(5)  << "No."
@@ -591,6 +735,90 @@ void viewAllSessions() {
     printDivider('=');
 }
 
+void editSession() {
+    cout << "\n"; printDivider('=');
+    cout << "  EDIT SESSION DETAILS\n";
+    cout << "  (Enter 0 to cancel)\n"; printDivider('=');
+    if (sessions.empty()) { cout << "  [WARNING] No sessions found.\n"; return; }
+
+    viewAllSessions();
+    cout << "  Enter session NUMBER to edit (or 0 to cancel): ";
+    string input; getline(cin, input); input = trim(input);
+    if (input == "0") { cout << "  [CANCELLED] Returning to menu.\n"; return; }
+
+    int choice;
+    try { choice = stoi(input); } catch (...) { cout << "  [ERROR] Invalid input.\n"; return; }
+    if (choice < 1 || choice > (int)sessions.size()) { cout << "  [ERROR] Invalid number.\n"; return; }
+
+    AttendanceSession& sess = sessions[choice - 1];
+    sess.displayHeader();
+    cout << "  Press ENTER to keep current value.\n\n";
+    string newVal;
+
+    cout << "  New Course Code [" << sess.getCourseCode() << "]: ";
+    getline(cin, newVal); newVal = trim(newVal);
+    if (!newVal.empty()) sess.setCourseCode(newVal);
+
+    while (true) {
+        cout << "  New Date (YYYY-MM-DD) [" << sess.getDate() << "]: ";
+        getline(cin, newVal); newVal = trim(newVal);
+        if (newVal.empty()) break;
+        if (isValidDate(newVal)) { sess.setDate(newVal); break; }
+        cout << "  [ERROR] Use YYYY-MM-DD format.\n";
+    }
+
+    while (true) {
+        cout << "  New Start Time (HH:MM) [" << sess.getStartTime() << "]: ";
+        getline(cin, newVal); newVal = trim(newVal);
+        if (newVal.empty()) break;
+        if (isValidTime(newVal)) { sess.setStartTime(newVal); break; }
+        cout << "  [ERROR] Use HH:MM 24hr format.\n";
+    }
+
+    while (true) {
+        cout << "  New Duration (1-8 hrs) [" << sess.getDuration() << "]: ";
+        getline(cin, newVal); newVal = trim(newVal);
+        if (newVal.empty()) break;
+        try {
+            int dur = stoi(newVal);
+            if (dur >= 1 && dur <= 8) { sess.setDuration(dur); break; }
+            cout << "  [ERROR] Duration must be 1-8.\n";
+        } catch (...) { cout << "  [ERROR] Enter a valid number.\n"; }
+    }
+
+    sess.rebuildSessionID();
+    saveAllSessionsToFile();
+    cout << "\n  [SUCCESS] Session updated!\n";
+    sess.displayHeader();
+}
+
+void deleteSession() {
+    cout << "\n"; printDivider('=');
+    cout << "  DELETE SESSION\n";
+    cout << "  (Enter 0 to cancel)\n"; printDivider('=');
+    if (sessions.empty()) { cout << "  [WARNING] No sessions found.\n"; return; }
+
+    viewAllSessions();
+    cout << "  Enter session NUMBER to delete (or 0 to cancel): ";
+    string input; getline(cin, input); input = trim(input);
+    if (input == "0") { cout << "  [CANCELLED] Returning to menu.\n"; return; }
+
+    int choice;
+    try { choice = stoi(input); } catch (...) { cout << "  [ERROR] Invalid input.\n"; return; }
+    if (choice < 1 || choice > (int)sessions.size()) { cout << "  [ERROR] Invalid number.\n"; return; }
+
+    cout << "\n  Session to delete:\n";
+    sessions[choice - 1].displayHeader();
+    cout << "  WARNING: Cannot be restored! Type YES to confirm: ";
+    string confirm; getline(cin, confirm);
+
+    if (toUpper(trim(confirm)) != "YES") { cout << "  [CANCELLED] Session not deleted.\n"; return; }
+
+    sessions.erase(sessions.begin() + (choice - 1));
+    saveAllSessionsToFile();
+    cout << "\n  [SUCCESS] Session deleted.\n"; printDivider('=');
+}
+
 // ============================================================
 //  ATTENDANCE MARKING
 // ============================================================
@@ -599,10 +827,7 @@ void markAttendance() {
     cout << "\n"; printDivider('=');
     cout << "  MARK ATTENDANCE\n";
     cout << "  (Enter 0 when selecting session to cancel)\n"; printDivider('=');
-
-    if (sessions.empty()) {
-        cout << "  [WARNING] No sessions found. Create a session first.\n"; return;
-    }
+    if (sessions.empty()) { cout << "  [WARNING] No sessions found.\n"; return; }
 
     viewAllSessions();
     cout << "  Enter session NUMBER (or 0 to cancel): ";
@@ -610,33 +835,25 @@ void markAttendance() {
     if (input == "0") { cout << "  [CANCELLED] Returning to menu.\n"; return; }
 
     int sessionChoice;
-    try { sessionChoice = stoi(input); } catch (...) {
-        cout << "  [ERROR] Invalid input.\n"; return;
-    }
-    if (sessionChoice < 1 || sessionChoice > (int)sessions.size()) {
-        cout << "  [ERROR] Invalid session number.\n"; return;
-    }
+    try { sessionChoice = stoi(input); } catch (...) { cout << "  [ERROR] Invalid input.\n"; return; }
+    if (sessionChoice < 1 || sessionChoice > (int)sessions.size()) { cout << "  [ERROR] Invalid number.\n"; return; }
 
     AttendanceSession& session = sessions[sessionChoice - 1];
     cout << "\n  Marking attendance for:\n";
     session.displayHeader();
-    cout << "  For each student:  1 = Present   2 = Absent   3 = Late\n\n";
+    cout << "  1 = Present   2 = Absent   3 = Late\n\n";
     printDivider('-');
 
     vector<AttendanceRecord>& records = session.getRecords();
-
     for (size_t i = 0; i < records.size(); i++) {
         cout << "  [" << i + 1 << "/" << records.size() << "] "
              << left << setw(15) << records[i].indexNumber
              << setw(25) << records[i].studentName
              << " Current: " << records[i].status << "\n";
-
         int mark = 0;
         while (mark < 1 || mark > 3) {
             cout << "  Status (1=Present, 2=Absent, 3=Late): ";
-            if (!(cin >> mark)) {
-                clearInput(); cout << "  [ERROR] Enter 1, 2, or 3.\n"; mark = 0; continue;
-            }
+            if (!(cin >> mark)) { clearInput(); mark = 0; continue; }
             clearInput();
             if (mark < 1 || mark > 3) cout << "  [ERROR] Enter 1, 2, or 3.\n";
         }
@@ -645,7 +862,6 @@ void markAttendance() {
         else                records[i].status = "Late";
         cout << "  Marked: " << records[i].status << "\n\n";
     }
-
     saveAllSessionsToFile();
     cout << "  [SUCCESS] Attendance marked and saved!\n"; printDivider('=');
 }
@@ -662,12 +878,8 @@ void updateAttendance() {
     if (input == "0") { cout << "  [CANCELLED] Returning to menu.\n"; return; }
 
     int sessionChoice;
-    try { sessionChoice = stoi(input); } catch (...) {
-        cout << "  [ERROR] Invalid input.\n"; return;
-    }
-    if (sessionChoice < 1 || sessionChoice > (int)sessions.size()) {
-        cout << "  [ERROR] Invalid session number.\n"; return;
-    }
+    try { sessionChoice = stoi(input); } catch (...) { cout << "  [ERROR] Invalid input.\n"; return; }
+    if (sessionChoice < 1 || sessionChoice > (int)sessions.size()) { cout << "  [ERROR] Invalid number.\n"; return; }
 
     AttendanceSession& session = sessions[sessionChoice - 1];
     session.displayHeader();
@@ -682,31 +894,23 @@ void updateAttendance() {
     for (size_t i = 0; i < records.size(); i++) {
         if (toUpper(records[i].indexNumber) == toUpper(idx)) {
             found = true;
-            cout << "\n  Student Found : " << records[i].studentName << "\n";
-            cout << "  Current Status: " << records[i].status << "\n\n";
-
+            cout << "\n  Student : " << records[i].studentName << "  |  Current: " << records[i].status << "\n\n";
             int mark = 0;
             while (mark < 1 || mark > 3) {
                 cout << "  New status (1=Present, 2=Absent, 3=Late): ";
-                if (!(cin >> mark)) {
-                    clearInput(); cout << "  [ERROR] Enter 1, 2, or 3.\n"; mark = 0; continue;
-                }
+                if (!(cin >> mark)) { clearInput(); mark = 0; continue; }
                 clearInput();
                 if (mark < 1 || mark > 3) cout << "  [ERROR] Enter 1, 2, or 3.\n";
             }
-
             string old = records[i].status;
             if      (mark == 1) records[i].status = "Present";
             else if (mark == 2) records[i].status = "Absent";
             else                records[i].status = "Late";
-
             saveAllSessionsToFile();
-            cout << "\n  [SUCCESS] Updated '" << records[i].studentName
-                 << "' from '" << old << "' to '" << records[i].status << "'\n";
+            cout << "\n  [SUCCESS] Updated from '" << old << "' to '" << records[i].status << "'\n";
             break;
         }
     }
-
     if (!found) cout << "  [NOT FOUND] No student with index '" << idx << "' in this session.\n";
     printDivider('=');
 }
@@ -727,32 +931,20 @@ void generateReport() {
     if (input == "0") { cout << "  [CANCELLED] Returning to menu.\n"; return; }
 
     int sessionChoice;
-    try { sessionChoice = stoi(input); } catch (...) {
-        cout << "  [ERROR] Invalid input.\n"; return;
-    }
-    if (sessionChoice < 1 || sessionChoice > (int)sessions.size()) {
-        cout << "  [ERROR] Invalid session number.\n"; return;
-    }
+    try { sessionChoice = stoi(input); } catch (...) { cout << "  [ERROR] Invalid input.\n"; return; }
+    if (sessionChoice < 1 || sessionChoice > (int)sessions.size()) { cout << "  [ERROR] Invalid number.\n"; return; }
 
     const AttendanceSession& session = sessions[sessionChoice - 1];
     session.displayHeader();
 
-    cout << left
-         << setw(15) << "Index No."
-         << setw(30) << "Student Name"
-         << setw(10) << "Status"
-         << "\n";
+    cout << left << setw(15) << "Index No." << setw(30) << "Student Name" << setw(10) << "Status" << "\n";
     printDivider('-');
 
     int presentCount = 0, absentCount = 0, lateCount = 0;
     const vector<AttendanceRecord>& records = session.getRecords();
 
     for (const auto& r : records) {
-        cout << left
-             << setw(15) << r.indexNumber
-             << setw(30) << r.studentName
-             << setw(10) << r.status
-             << "\n";
+        cout << left << setw(15) << r.indexNumber << setw(30) << r.studentName << setw(10) << r.status << "\n";
         if      (r.status == "Present") presentCount++;
         else if (r.status == "Late")    lateCount++;
         else                            absentCount++;
@@ -760,16 +952,118 @@ void generateReport() {
 
     printDivider('=');
     cout << "  SUMMARY\n"; printDivider('-');
-    cout << "  Total Students : " << records.size()  << "\n";
-    cout << "  Present        : " << presentCount    << "\n";
-    cout << "  Late           : " << lateCount       << "\n";
-    cout << "  Absent         : " << absentCount     << "\n";
+    cout << "  Total Students : " << records.size() << "\n";
+    cout << "  Present        : " << presentCount   << "\n";
+    cout << "  Late           : " << lateCount      << "\n";
+    cout << "  Absent         : " << absentCount    << "\n";
     if (!records.empty()) {
         double rate = ((double)(presentCount + lateCount) / records.size()) * 100.0;
         cout << fixed << setprecision(1);
         cout << "  Attendance Rate: " << rate << "% (Present + Late)\n";
     }
     printDivider('=');
+}
+
+void exportSessionToCSV() {
+    cout << "\n"; printDivider('=');
+    cout << "  EXPORT SESSION REPORT TO CSV\n";
+    cout << "  (Enter 0 to cancel)\n"; printDivider('=');
+    if (sessions.empty()) { cout << "  [WARNING] No sessions found.\n"; return; }
+
+    viewAllSessions();
+    cout << "  Enter session NUMBER (or 0 to cancel): ";
+    string input; getline(cin, input); input = trim(input);
+    if (input == "0") { cout << "  [CANCELLED] Returning to menu.\n"; return; }
+
+    int sessionChoice;
+    try { sessionChoice = stoi(input); } catch (...) { cout << "  [ERROR] Invalid input.\n"; return; }
+    if (sessionChoice < 1 || sessionChoice > (int)sessions.size()) { cout << "  [ERROR] Invalid number.\n"; return; }
+
+    const AttendanceSession& session = sessions[sessionChoice - 1];
+    string csvFile = "report_" + session.getSessionID() + ".csv";
+
+    ofstream file(csvFile);
+    if (!file.is_open()) { cout << "  [ERROR] Could not create file: " << csvFile << "\n"; return; }
+
+    file << "ATTENDANCE REPORT\n";
+    file << "Session ID,"  << session.getSessionID()  << "\n";
+    file << "Course Code," << session.getCourseCode() << "\n";
+    file << "Date,"        << session.getDate()       << "\n";
+    file << "Start Time,"  << session.getStartTime()  << "\n";
+    file << "Duration,"    << session.getDuration()   << " hour(s)\n\n";
+    file << "No.,Index Number,Student Name,Status\n";
+
+    int presentCount = 0, absentCount = 0, lateCount = 0;
+    const vector<AttendanceRecord>& records = session.getRecords();
+
+    for (size_t i = 0; i < records.size(); i++) {
+        const auto& r = records[i];
+        file << (i + 1) << "," << r.indexNumber << ",\"" << r.studentName << "\"," << r.status << "\n";
+        if      (r.status == "Present") presentCount++;
+        else if (r.status == "Late")    lateCount++;
+        else                            absentCount++;
+    }
+
+    file << "\nSUMMARY\n";
+    file << "Total Students," << records.size() << "\n";
+    file << "Present,"        << presentCount   << "\n";
+    file << "Late,"           << lateCount      << "\n";
+    file << "Absent,"         << absentCount    << "\n";
+    if (!records.empty()) {
+        double rate = ((double)(presentCount + lateCount) / records.size()) * 100.0;
+        file << fixed << setprecision(1);
+        file << "Attendance Rate," << rate << "%\n";
+    }
+
+    file.close();
+    cout << "\n  [SUCCESS] Exported to: " << csvFile << "\n";
+    cout << "  Open with Microsoft Excel or Google Sheets.\n";
+    printDivider('=');
+}
+
+// ============================================================
+//  ADMIN TOOLS
+// ============================================================
+
+void changeAdminPassword() {
+    cout << "\n"; printDivider('=');
+    cout << "  CHANGE ADMIN PASSWORD\n"; printDivider('=');
+    cout << "  Enter CURRENT password : ";
+    if (!verifyAdminPassword()) { cout << "  [DENIED] Incorrect current password.\n"; return; }
+
+    string username, oldPass;
+    loadAdminCredentials(username, oldPass);
+
+    string newPass, confirm;
+    while (true) {
+        cout << "  Enter NEW password     : ";
+        getline(cin, newPass); newPass = trim(newPass);
+        if (newPass.empty()) { cout << "  [ERROR] Cannot be empty.\n"; continue; }
+        cout << "  Confirm NEW password   : ";
+        getline(cin, confirm);
+        if (newPass == confirm) break;
+        cout << "  [ERROR] Passwords do not match.\n";
+    }
+    saveAdminCredentials(username, newPass);
+    cout << "\n  [SUCCESS] Password changed.\n"; printDivider('=');
+}
+
+void clearAllData() {
+    cout << "\n"; printDivider('=');
+    cout << "  CLEAR ALL SYSTEM DATA\n"; printDivider('=');
+    cout << "  !! Permanently deletes ALL students, sessions, and records !!\n\n";
+    cout << "  Type CLEAR to confirm (or anything else to cancel): ";
+    string confirm; getline(cin, confirm);
+    if (toUpper(trim(confirm)) != "CLEAR") { cout << "  [CANCELLED] No data was deleted.\n"; return; }
+
+    cout << "\n";
+    if (!verifyAdminPassword()) { cout << "  [DENIED] Incorrect password.\n"; return; }
+
+    students.clear();
+    sessions.clear();
+    ofstream(STUDENTS_FILE, ios::trunc).close();
+    ofstream(SESSIONS_FILE, ios::trunc).close();
+    cout << "\n  [SUCCESS] All data cleared.\n"; printDivider('=');
 }
 
 // ============================================================
@@ -781,18 +1075,24 @@ void studentManagementMenu() {
     do {
         cout << "\n"; printDivider('*');
         cout << "  STUDENT MANAGEMENT\n"; printDivider('*');
-        cout << "  1. Register New Student\n";
-        cout << "  2. View All Students\n";
-        cout << "  3. Search Student by Index Number\n";
+        cout << "  1. Register New Student (Manual)\n";
+        cout << "  2. Import Students from CSV File\n";
+        cout << "  3. View All Students\n";
+        cout << "  4. Search Student by Index Number\n";
+        cout << "  5. Edit Student Details\n";
+        cout << "  6. Delete Student\n";
         cout << "  0. Back to Main Menu\n";
         printDivider('*');
         cout << "  Enter choice: ";
         if (!(cin >> choice)) { clearInput(); cout << "  [ERROR] Enter a number.\n"; continue; }
         clearInput();
         switch (choice) {
-            case 1: registerStudent();      break;
-            case 2: viewAllStudents();      break;
-            case 3: searchStudentByIndex(); break;
+            case 1: registerStudent();        break;
+            case 2: importStudentsFromFile(); break;
+            case 3: viewAllStudents();        break;
+            case 4: searchStudentByIndex();   break;
+            case 5: editStudent();            break;
+            case 6: deleteStudent();          break;
             case 0: break;
             default: cout << "  [ERROR] Invalid choice.\n";
         }
@@ -806,6 +1106,8 @@ void sessionManagementMenu() {
         cout << "  SESSION MANAGEMENT\n"; printDivider('*');
         cout << "  1. Create New Lecture Session\n";
         cout << "  2. View All Sessions\n";
+        cout << "  3. Edit Session Details\n";
+        cout << "  4. Delete Session\n";
         cout << "  0. Back to Main Menu\n";
         printDivider('*');
         cout << "  Enter choice: ";
@@ -814,6 +1116,8 @@ void sessionManagementMenu() {
         switch (choice) {
             case 1: createSession();   break;
             case 2: viewAllSessions(); break;
+            case 3: editSession();     break;
+            case 4: deleteSession();   break;
             case 0: break;
             default: cout << "  [ERROR] Invalid choice.\n";
         }
@@ -845,15 +1149,38 @@ void reportsMenu() {
     int choice;
     do {
         cout << "\n"; printDivider('*');
-        cout << "  REPORTS\n"; printDivider('*');
+        cout << "  REPORTS AND EXPORT\n"; printDivider('*');
         cout << "  1. View Attendance Report (Screen)\n";
+        cout << "  2. Export Session Report to CSV\n";
         cout << "  0. Back to Main Menu\n";
         printDivider('*');
         cout << "  Enter choice: ";
         if (!(cin >> choice)) { clearInput(); cout << "  [ERROR] Enter a number.\n"; continue; }
         clearInput();
         switch (choice) {
-            case 1: generateReport(); break;
+            case 1: generateReport();     break;
+            case 2: exportSessionToCSV(); break;
+            case 0: break;
+            default: cout << "  [ERROR] Invalid choice.\n";
+        }
+    } while (choice != 0);
+}
+
+void adminToolsMenu() {
+    int choice;
+    do {
+        cout << "\n"; printDivider('*');
+        cout << "  ADMIN TOOLS\n"; printDivider('*');
+        cout << "  1. Change Admin Password\n";
+        cout << "  2. Clear ALL System Data  [DANGER]\n";
+        cout << "  0. Back to Main Menu\n";
+        printDivider('*');
+        cout << "  Enter choice: ";
+        if (!(cin >> choice)) { clearInput(); cout << "  [ERROR] Enter a number.\n"; continue; }
+        clearInput();
+        switch (choice) {
+            case 1: changeAdminPassword(); break;
+            case 2: clearAllData();        break;
             case 0: break;
             default: cout << "  [ERROR] Invalid choice.\n";
         }
@@ -870,7 +1197,8 @@ void mainMenu() {
         cout << "  1. Student Management\n";
         cout << "  2. Session Management\n";
         cout << "  3. Mark / Update Attendance\n";
-        cout << "  4. Reports\n";
+        cout << "  4. Reports and Export\n";
+        cout << "  5. Admin Tools\n";
         cout << "  0. Exit\n";
         printDivider('#');
         cout << "  Enter choice: ";
@@ -881,6 +1209,7 @@ void mainMenu() {
             case 2: sessionManagementMenu(); break;
             case 3: attendanceMenu();        break;
             case 4: reportsMenu();           break;
+            case 5: adminToolsMenu();        break;
             case 0: cout << "\n  Goodbye!\n\n"; break;
             default: cout << "  [ERROR] Invalid choice.\n";
         }
@@ -906,3 +1235,9 @@ int main() {
     mainMenu();
     return 0;
 }
+```
+
+**Then in terminal:**
+```
+git add .
+git commit -m "Week 3: Add CSV export, import from file, and admin password change"
