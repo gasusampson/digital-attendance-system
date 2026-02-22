@@ -4,7 +4,7 @@
  *  Programme : HND Electrical Engineering (Level 200)
  *  Course    : EEE227 - Introduction to C++ Programming
  *  Developer : Franklin Sampson
- *  Version   : 1.2 - Admin Login + Complete Student Management
+ *  Version   : 2.1 - AttendanceSession class added
  * ============================================================
  */
 
@@ -15,6 +15,7 @@
 #include <iomanip>
 #include <algorithm>
 #include <limits>
+#include <sstream>
 using namespace std;
 
 const string ADMIN_FILE = "admin.txt";
@@ -81,8 +82,87 @@ public:
     }
 };
 
-// Global student list
-vector<Student> students;
+// ============================================================
+//  ATTENDANCE RECORD STRUCT
+// ============================================================
+struct AttendanceRecord {
+    string indexNumber;
+    string studentName;
+    string status;   // "Present", "Absent", or "Late"
+
+    AttendanceRecord() : status("Absent") {}
+    AttendanceRecord(string idx, string name)
+        : indexNumber(idx), studentName(name), status("Absent") {}
+};
+
+// ============================================================
+//  ATTENDANCE SESSION CLASS
+// ============================================================
+class AttendanceSession {
+private:
+    string sessionID;
+    string courseCode;
+    string date;
+    string startTime;
+    int    durationHours;
+    vector<AttendanceRecord> records;
+
+public:
+    AttendanceSession() : durationHours(0) {}
+
+    AttendanceSession(string code, string dt, string start, int dur)
+        : courseCode(code), date(dt), startTime(start), durationHours(dur) {
+        string d = dt;
+        replace(d.begin(), d.end(), '-', '_');
+        sessionID = code + "_" + d;
+    }
+
+    // Getters
+    string getSessionID()  const { return sessionID; }
+    string getCourseCode() const { return courseCode; }
+    string getDate()       const { return date; }
+    string getStartTime()  const { return startTime; }
+    int    getDuration()   const { return durationHours; }
+
+    vector<AttendanceRecord>&       getRecords()       { return records; }
+    const vector<AttendanceRecord>& getRecords() const { return records; }
+
+    // Setters
+    void setCourseCode(string code) { courseCode    = code; }
+    void setDate(string dt)         { date          = dt; }
+    void setStartTime(string st)    { startTime     = st; }
+    void setDuration(int dur)       { durationHours = dur; }
+
+    void rebuildSessionID() {
+        string d = date;
+        replace(d.begin(), d.end(), '-', '_');
+        sessionID = courseCode + "_" + d;
+    }
+
+    // Populate records from student list (all default to Absent)
+    void initialiseRecords(const vector<Student>& students) {
+        records.clear();
+        for (const auto& s : students)
+            records.push_back(AttendanceRecord(s.getIndexNumber(), s.getFullName()));
+    }
+
+    void displayHeader() const {
+        printDivider('=');
+        cout << "  Session ID  : " << sessionID      << "\n";
+        cout << "  Course Code : " << courseCode     << "\n";
+        cout << "  Date        : " << date           << "\n";
+        cout << "  Start Time  : " << startTime      << "\n";
+        cout << "  Duration    : " << durationHours  << " hour(s)\n";
+        cout << "  Students    : " << records.size() << "\n";
+        printDivider('=');
+    }
+};
+
+// ============================================================
+//  GLOBAL STORES
+// ============================================================
+vector<Student>           students;
+vector<AttendanceSession> sessions;
 
 // ============================================================
 //  ADMIN CREDENTIALS
@@ -262,6 +342,139 @@ void searchStudentByIndex() {
     cout << "  [NOT FOUND] No student with index '" << idx << "'.\n";
 }
 
+// ============================================================
+//  SESSION HELPERS
+// ============================================================
+
+bool isValidDate(const string& d) {
+    if (d.size() != 10) return false;
+    if (d[4] != '-' || d[7] != '-') return false;
+    for (int i = 0; i < 10; i++) {
+        if (i == 4 || i == 7) continue;
+        if (!isdigit(d[i])) return false;
+    }
+    return true;
+}
+
+bool isValidTime(const string& t) {
+    if (t.size() != 5 || t[2] != ':') return false;
+    for (int i = 0; i < 5; i++) {
+        if (i == 2) continue;
+        if (!isdigit(t[i])) return false;
+    }
+    int hh = stoi(t.substr(0, 2));
+    int mm = stoi(t.substr(3, 2));
+    return (hh >= 0 && hh <= 23 && mm >= 0 && mm <= 59);
+}
+
+bool sessionExists(const string& id) {
+    for (const auto& sess : sessions)
+        if (toUpper(sess.getSessionID()) == toUpper(id)) return true;
+    return false;
+}
+
+// ============================================================
+//  SESSION FUNCTIONS
+// ============================================================
+
+void createSession() {
+    cout << "\n"; printDivider('=');
+    cout << "  CREATE NEW LECTURE SESSION\n";
+    cout << "  (Enter 0 at any prompt to cancel)\n"; printDivider('=');
+
+    if (students.empty()) {
+        cout << "  [WARNING] No students registered yet. Register students first.\n";
+        return;
+    }
+
+    string code, date, startTime;
+    int duration = 0;
+
+    cout << "  Enter Course Code (e.g. EEE227) or 0 to cancel: ";
+    getline(cin, code); code = trim(code);
+    if (code == "0") { cout << "  [CANCELLED] Returning to menu.\n"; return; }
+    if (code.empty()) { cout << "  [ERROR] Course code cannot be empty.\n"; return; }
+
+    while (true) {
+        cout << "  Enter Date (YYYY-MM-DD) or 0 to cancel: ";
+        getline(cin, date); date = trim(date);
+        if (date == "0") { cout << "  [CANCELLED] Returning to menu.\n"; return; }
+        if (isValidDate(date)) break;
+        cout << "  [ERROR] Use YYYY-MM-DD e.g. 2026-02-23\n";
+    }
+
+    while (true) {
+        cout << "  Enter Start Time (HH:MM, 24hr) or 0 to cancel: ";
+        getline(cin, startTime); startTime = trim(startTime);
+        if (startTime == "0") { cout << "  [CANCELLED] Returning to menu.\n"; return; }
+        if (isValidTime(startTime)) break;
+        cout << "  [ERROR] Use HH:MM e.g. 08:00\n";
+    }
+
+    while (duration < 1 || duration > 8) {
+        cout << "  Enter Duration in Hours (1-8) or 0 to cancel: ";
+        string d; getline(cin, d); d = trim(d);
+        if (d == "0") { cout << "  [CANCELLED] Returning to menu.\n"; return; }
+        try {
+            duration = stoi(d);
+            if (duration < 1 || duration > 8)
+                cout << "  [ERROR] Duration must be 1-8 hours.\n";
+        } catch (...) {
+            cout << "  [ERROR] Enter a valid number.\n";
+            duration = 0;
+        }
+    }
+
+    AttendanceSession newSession(code, date, startTime, duration);
+    if (sessionExists(newSession.getSessionID())) {
+        cout << "  [ERROR] Session for " << code << " on " << date << " already exists.\n";
+        return;
+    }
+
+    newSession.initialiseRecords(students);
+    sessions.push_back(newSession);
+    cout << "\n  [SUCCESS] Session created!\n";
+    sessions.back().displayHeader();
+}
+
+void viewAllSessions() {
+    cout << "\n"; printDivider('=');
+    cout << "  ALL LECTURE SESSIONS  (Total: " << sessions.size() << ")\n"; printDivider('=');
+
+    if (sessions.empty()) {
+        cout << "  No sessions created yet.\n"; printDivider('='); return;
+    }
+
+    cout << left
+         << setw(5)  << "No."
+         << setw(28) << "Session ID"
+         << setw(12) << "Course"
+         << setw(14) << "Date"
+         << setw(10) << "Start"
+         << setw(12) << "Duration"
+         << setw(10) << "Students"
+         << "\n";
+    printDivider('-');
+
+    for (size_t i = 0; i < sessions.size(); i++) {
+        const auto& s = sessions[i];
+        cout << left
+             << setw(5)  << (to_string(i + 1) + ".")
+             << setw(28) << s.getSessionID()
+             << setw(12) << s.getCourseCode()
+             << setw(14) << s.getDate()
+             << setw(10) << s.getStartTime()
+             << setw(12) << (to_string(s.getDuration()) + " hr(s)")
+             << setw(10) << s.getRecords().size()
+             << "\n";
+    }
+    printDivider('=');
+}
+
+// ============================================================
+//  MENUS
+// ============================================================
+
 void studentManagementMenu() {
     int choice;
     do {
@@ -285,6 +498,27 @@ void studentManagementMenu() {
     } while (choice != 0);
 }
 
+void sessionManagementMenu() {
+    int choice;
+    do {
+        cout << "\n"; printDivider('*');
+        cout << "  SESSION MANAGEMENT\n"; printDivider('*');
+        cout << "  1. Create New Lecture Session\n";
+        cout << "  2. View All Sessions\n";
+        cout << "  0. Back to Main Menu\n";
+        printDivider('*');
+        cout << "  Enter choice: ";
+        if (!(cin >> choice)) { clearInput(); cout << "  [ERROR] Enter a number.\n"; continue; }
+        clearInput();
+        switch (choice) {
+            case 1: createSession();   break;
+            case 2: viewAllSessions(); break;
+            case 0: break;
+            default: cout << "  [ERROR] Invalid choice.\n";
+        }
+    } while (choice != 0);
+}
+
 void mainMenu() {
     int choice;
     do {
@@ -293,13 +527,15 @@ void mainMenu() {
         cout << "  HND Electrical Engineering, Level 200\n";
         printDivider('#');
         cout << "  1. Student Management\n";
+        cout << "  2. Session Management\n";
         cout << "  0. Exit\n";
         printDivider('#');
         cout << "  Enter choice: ";
-        if (!(cin >> choice)) { clearInput(); continue; }
+        if (!(cin >> choice)) { clearInput(); cout << "  [ERROR] Enter a number.\n"; continue; }
         clearInput();
         switch (choice) {
             case 1: studentManagementMenu(); break;
+            case 2: sessionManagementMenu(); break;
             case 0: cout << "\n  Goodbye!\n\n"; break;
             default: cout << "  [ERROR] Invalid choice.\n";
         }
