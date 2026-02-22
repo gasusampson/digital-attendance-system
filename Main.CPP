@@ -4,7 +4,7 @@
  *  Programme : HND Electrical Engineering (Level 200)
  *  Course    : EEE227 - Introduction to C++ Programming
  *  Developer : Franklin Sampson
- *  Version   : 2.2 - Attendance marking implemented
+ *  Version   : 2.3 - Reports and complete menu flow
  * ============================================================
  */
 
@@ -587,6 +587,67 @@ void updateAttendance() {
 }
 
 // ============================================================
+//  REPORTS
+// ============================================================
+
+void generateReport() {
+    cout << "\n"; printDivider('=');
+    cout << "  ATTENDANCE REPORT\n";
+    cout << "  (Enter 0 to cancel)\n"; printDivider('=');
+    if (sessions.empty()) { cout << "  [WARNING] No sessions found.\n"; return; }
+
+    viewAllSessions();
+    cout << "  Enter session NUMBER (or 0 to cancel): ";
+    string input; getline(cin, input); input = trim(input);
+    if (input == "0") { cout << "  [CANCELLED] Returning to menu.\n"; return; }
+
+    int sessionChoice;
+    try { sessionChoice = stoi(input); } catch (...) {
+        cout << "  [ERROR] Invalid input.\n"; return;
+    }
+    if (sessionChoice < 1 || sessionChoice > (int)sessions.size()) {
+        cout << "  [ERROR] Invalid session number.\n"; return;
+    }
+
+    const AttendanceSession& session = sessions[sessionChoice - 1];
+    session.displayHeader();
+
+    cout << left
+         << setw(15) << "Index No."
+         << setw(30) << "Student Name"
+         << setw(10) << "Status"
+         << "\n";
+    printDivider('-');
+
+    int presentCount = 0, absentCount = 0, lateCount = 0;
+    const vector<AttendanceRecord>& records = session.getRecords();
+
+    for (const auto& r : records) {
+        cout << left
+             << setw(15) << r.indexNumber
+             << setw(30) << r.studentName
+             << setw(10) << r.status
+             << "\n";
+        if      (r.status == "Present") presentCount++;
+        else if (r.status == "Late")    lateCount++;
+        else                            absentCount++;
+    }
+
+    printDivider('=');
+    cout << "  SUMMARY\n"; printDivider('-');
+    cout << "  Total Students : " << records.size()  << "\n";
+    cout << "  Present        : " << presentCount    << "\n";
+    cout << "  Late           : " << lateCount       << "\n";
+    cout << "  Absent         : " << absentCount     << "\n";
+    if (!records.empty()) {
+        double rate = ((double)(presentCount + lateCount) / records.size()) * 100.0;
+        cout << fixed << setprecision(1);
+        cout << "  Attendance Rate: " << rate << "% (Present + Late)\n";
+    }
+    printDivider('=');
+}
+
+// ============================================================
 //  MENUS
 // ============================================================
 
@@ -655,6 +716,25 @@ void attendanceMenu() {
     } while (choice != 0);
 }
 
+void reportsMenu() {
+    int choice;
+    do {
+        cout << "\n"; printDivider('*');
+        cout << "  REPORTS\n"; printDivider('*');
+        cout << "  1. View Attendance Report (Screen)\n";
+        cout << "  0. Back to Main Menu\n";
+        printDivider('*');
+        cout << "  Enter choice: ";
+        if (!(cin >> choice)) { clearInput(); cout << "  [ERROR] Enter a number.\n"; continue; }
+        clearInput();
+        switch (choice) {
+            case 1: generateReport(); break;
+            case 0: break;
+            default: cout << "  [ERROR] Invalid choice.\n";
+        }
+    } while (choice != 0);
+}
+
 void mainMenu() {
     int choice;
     do {
@@ -665,6 +745,7 @@ void mainMenu() {
         cout << "  1. Student Management\n";
         cout << "  2. Session Management\n";
         cout << "  3. Mark / Update Attendance\n";
+        cout << "  4. Reports\n";
         cout << "  0. Exit\n";
         printDivider('#');
         cout << "  Enter choice: ";
@@ -674,6 +755,7 @@ void mainMenu() {
             case 1: studentManagementMenu(); break;
             case 2: sessionManagementMenu(); break;
             case 3: attendanceMenu();        break;
+            case 4: reportsMenu();           break;
             case 0: cout << "\n  Goodbye!\n\n"; break;
             default: cout << "  [ERROR] Invalid choice.\n";
         }
@@ -692,3 +774,9 @@ int main() {
     mainMenu();
     return 0;
 }
+```
+
+**Then in terminal:**
+```
+git add .
+git commit -m "Week 2: Add report generation with summary counts and menu-driven flow"
