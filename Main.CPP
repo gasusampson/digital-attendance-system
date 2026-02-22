@@ -4,7 +4,7 @@
  *  Programme : HND Electrical Engineering (Level 200)
  *  Course    : EEE227 - Introduction to C++ Programming
  *  Developer : Franklin Sampson
- *  Version   : 2.1 - AttendanceSession class added
+ *  Version   : 2.2 - Attendance marking implemented
  * ============================================================
  */
 
@@ -117,7 +117,6 @@ public:
         sessionID = code + "_" + d;
     }
 
-    // Getters
     string getSessionID()  const { return sessionID; }
     string getCourseCode() const { return courseCode; }
     string getDate()       const { return date; }
@@ -127,7 +126,6 @@ public:
     vector<AttendanceRecord>&       getRecords()       { return records; }
     const vector<AttendanceRecord>& getRecords() const { return records; }
 
-    // Setters
     void setCourseCode(string code) { courseCode    = code; }
     void setDate(string dt)         { date          = dt; }
     void setStartTime(string st)    { startTime     = st; }
@@ -139,7 +137,6 @@ public:
         sessionID = courseCode + "_" + d;
     }
 
-    // Populate records from student list (all default to Absent)
     void initialiseRecords(const vector<Student>& students) {
         records.clear();
         for (const auto& s : students)
@@ -472,6 +469,124 @@ void viewAllSessions() {
 }
 
 // ============================================================
+//  ATTENDANCE MARKING
+// ============================================================
+
+void markAttendance() {
+    cout << "\n"; printDivider('=');
+    cout << "  MARK ATTENDANCE\n";
+    cout << "  (Enter 0 when selecting session to cancel)\n"; printDivider('=');
+
+    if (sessions.empty()) {
+        cout << "  [WARNING] No sessions found. Create a session first.\n"; return;
+    }
+
+    viewAllSessions();
+    cout << "  Enter session NUMBER (or 0 to cancel): ";
+    string input; getline(cin, input); input = trim(input);
+    if (input == "0") { cout << "  [CANCELLED] Returning to menu.\n"; return; }
+
+    int sessionChoice;
+    try { sessionChoice = stoi(input); } catch (...) {
+        cout << "  [ERROR] Invalid input.\n"; return;
+    }
+    if (sessionChoice < 1 || sessionChoice > (int)sessions.size()) {
+        cout << "  [ERROR] Invalid session number.\n"; return;
+    }
+
+    AttendanceSession& session = sessions[sessionChoice - 1];
+    cout << "\n  Marking attendance for:\n";
+    session.displayHeader();
+    cout << "  For each student:  1 = Present   2 = Absent   3 = Late\n\n";
+    printDivider('-');
+
+    vector<AttendanceRecord>& records = session.getRecords();
+
+    for (size_t i = 0; i < records.size(); i++) {
+        cout << "  [" << i + 1 << "/" << records.size() << "] "
+             << left << setw(15) << records[i].indexNumber
+             << setw(25) << records[i].studentName
+             << " Current: " << records[i].status << "\n";
+
+        int mark = 0;
+        while (mark < 1 || mark > 3) {
+            cout << "  Status (1=Present, 2=Absent, 3=Late): ";
+            if (!(cin >> mark)) {
+                clearInput(); cout << "  [ERROR] Enter 1, 2, or 3.\n"; mark = 0; continue;
+            }
+            clearInput();
+            if (mark < 1 || mark > 3) cout << "  [ERROR] Enter 1, 2, or 3.\n";
+        }
+        if      (mark == 1) records[i].status = "Present";
+        else if (mark == 2) records[i].status = "Absent";
+        else                records[i].status = "Late";
+        cout << "  Marked: " << records[i].status << "\n\n";
+    }
+
+    cout << "  [SUCCESS] Attendance marked!\n"; printDivider('=');
+}
+
+void updateAttendance() {
+    cout << "\n"; printDivider('=');
+    cout << "  UPDATE ATTENDANCE RECORD\n";
+    cout << "  (Enter 0 when selecting session to cancel)\n"; printDivider('=');
+    if (sessions.empty()) { cout << "  [WARNING] No sessions found.\n"; return; }
+
+    viewAllSessions();
+    cout << "  Enter session NUMBER (or 0 to cancel): ";
+    string input; getline(cin, input); input = trim(input);
+    if (input == "0") { cout << "  [CANCELLED] Returning to menu.\n"; return; }
+
+    int sessionChoice;
+    try { sessionChoice = stoi(input); } catch (...) {
+        cout << "  [ERROR] Invalid input.\n"; return;
+    }
+    if (sessionChoice < 1 || sessionChoice > (int)sessions.size()) {
+        cout << "  [ERROR] Invalid session number.\n"; return;
+    }
+
+    AttendanceSession& session = sessions[sessionChoice - 1];
+    session.displayHeader();
+
+    cout << "  Enter student Index Number (or 0 to cancel): ";
+    string idx; getline(cin, idx); idx = trim(idx);
+    if (idx == "0") { cout << "  [CANCELLED] Returning to menu.\n"; return; }
+
+    vector<AttendanceRecord>& records = session.getRecords();
+    bool found = false;
+
+    for (size_t i = 0; i < records.size(); i++) {
+        if (toUpper(records[i].indexNumber) == toUpper(idx)) {
+            found = true;
+            cout << "\n  Student Found : " << records[i].studentName << "\n";
+            cout << "  Current Status: " << records[i].status << "\n\n";
+
+            int mark = 0;
+            while (mark < 1 || mark > 3) {
+                cout << "  New status (1=Present, 2=Absent, 3=Late): ";
+                if (!(cin >> mark)) {
+                    clearInput(); cout << "  [ERROR] Enter 1, 2, or 3.\n"; mark = 0; continue;
+                }
+                clearInput();
+                if (mark < 1 || mark > 3) cout << "  [ERROR] Enter 1, 2, or 3.\n";
+            }
+
+            string old = records[i].status;
+            if      (mark == 1) records[i].status = "Present";
+            else if (mark == 2) records[i].status = "Absent";
+            else                records[i].status = "Late";
+
+            cout << "\n  [SUCCESS] Updated '" << records[i].studentName
+                 << "' from '" << old << "' to '" << records[i].status << "'\n";
+            break;
+        }
+    }
+
+    if (!found) cout << "  [NOT FOUND] No student with index '" << idx << "' in this session.\n";
+    printDivider('=');
+}
+
+// ============================================================
 //  MENUS
 // ============================================================
 
@@ -519,6 +634,27 @@ void sessionManagementMenu() {
     } while (choice != 0);
 }
 
+void attendanceMenu() {
+    int choice;
+    do {
+        cout << "\n"; printDivider('*');
+        cout << "  MARK / UPDATE ATTENDANCE\n"; printDivider('*');
+        cout << "  1. Mark Attendance for a Session\n";
+        cout << "  2. Update a Student's Attendance\n";
+        cout << "  0. Back to Main Menu\n";
+        printDivider('*');
+        cout << "  Enter choice: ";
+        if (!(cin >> choice)) { clearInput(); cout << "  [ERROR] Enter a number.\n"; continue; }
+        clearInput();
+        switch (choice) {
+            case 1: markAttendance();   break;
+            case 2: updateAttendance(); break;
+            case 0: break;
+            default: cout << "  [ERROR] Invalid choice.\n";
+        }
+    } while (choice != 0);
+}
+
 void mainMenu() {
     int choice;
     do {
@@ -528,6 +664,7 @@ void mainMenu() {
         printDivider('#');
         cout << "  1. Student Management\n";
         cout << "  2. Session Management\n";
+        cout << "  3. Mark / Update Attendance\n";
         cout << "  0. Exit\n";
         printDivider('#');
         cout << "  Enter choice: ";
@@ -536,6 +673,7 @@ void mainMenu() {
         switch (choice) {
             case 1: studentManagementMenu(); break;
             case 2: sessionManagementMenu(); break;
+            case 3: attendanceMenu();        break;
             case 0: cout << "\n  Goodbye!\n\n"; break;
             default: cout << "  [ERROR] Invalid choice.\n";
         }
